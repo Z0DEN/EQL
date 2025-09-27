@@ -1,19 +1,21 @@
 {
-   "name": "libp2p-webrtc-guide",
+   "name": "eql-core",
    "version": "1.0.0",
-   "private": true,
+   "main": "index.js",
    "type": "module",
+   "files": [
+      "index.js",
+      "core.js"
+   ],
    "dependencies": {
       "@chainsafe/libp2p-gossipsub": "^14.1.1",
       "@chainsafe/libp2p-noise": "^16.1.5",
       "@chainsafe/libp2p-yamux": "^7.0.4",
-      "@headlessui/react": "^2.0.3",
       "@libp2p/autonat": "^2.0.37",
       "@libp2p/bootstrap": "^11.0.43",
       "@libp2p/circuit-relay-v2": "^3.2.24",
       "@libp2p/identify": "^3.0.39",
       "@libp2p/interface-pubsub": "^4.0.1",
-      "@libp2p/logger": "^5.1.21",
       "@libp2p/peer-id-factory": "^4.2.0",
       "@libp2p/pubsub-peer-discovery": "^11.0.2",
       "@libp2p/tcp": "^10.1.17",
@@ -22,8 +24,6 @@
       "@libp2p/webtransport": "^5.0.47",
       "@multiformats/multiaddr": "^12.3.0",
       "@multiformats/multiaddr-matcher": "^1.2.4",
-      "date-fns": "^3.6.0",
-      "libp2p": "^2.8.12",
-      "pretty-ms": "^9.0.0"
+      "libp2p": "^2.8.12"
    }
 }
