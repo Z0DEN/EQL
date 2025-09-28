@@ -8,8 +8,9 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
-    "sourceMap": true
+    "sourceMap": true,
+    "declaration": true,
   },
-  "include": ["**/*.ts"],
+  "include": ["core.ts"],
   "exclude": ["node_modules", "dist"]
 }
