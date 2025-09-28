@@ -13,13 +13,18 @@ import { tcp } from '@libp2p/tcp'
 const TOPIC = 'p2p-social'
 
 export class P2PNode {
+    private node: any
+    private bootstrapPeers: string[]
+    private onMessage?: (from: string, text: string) => void
+
     constructor(bootstrapPeers = [' ']) {
         this.bootstrapPeers = bootstrapPeers
-        this.node = null
     }
 
     /** 🔹 Создать и запустить ноду */
-    async start(addrToDial = null) {
+    async start(addrToDial: string | null = null, onMessage?: (from: string, text: string) => void) {
+        this.onMessage = onMessage
+
         this.node = await createLibp2p({
             transports: [webSockets(), circuitRelayTransport(), tcp()],
             addresses: {
@@ -86,7 +91,6 @@ export class P2PNode {
             console.log('Stopping node...')
             await this.node.stop()
             console.log('Node stopped')
-            process.exit(0)
     }
 
     /** 🟢 Внутренние обработчики */
@@ -103,12 +107,11 @@ export class P2PNode {
     })
 
     // входящие сообщения
-    this.node.services.pubsub.addEventListener('message', (evt) => {
+    this.node.services.pubsub.addEventListener('message', (evt: any) => {
         const msg = evt.detail
         const text = new TextDecoder().decode(msg.data)
-        console.log(`>${msg.from.toString().slice(-5)}: ${text}`)
+        //console.log(`>${msg.from.toString().slice(-5)}: ${text}`)
+        this.onMessage?.(msg.from.toString(), text)
     })
-
-    process.on('SIGINT', () => this.stop())
-    }
+}
 }
