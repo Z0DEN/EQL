@@ -1,5 +1,6 @@
 package com.example.eqlapp
 
+import eqlcore.Eqlcore
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -13,14 +14,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import chatnode.Chatnode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.ui.text.input.KeyboardType
 
-class MainActivity : ComponentActivity(), chatnode.MessageReceiver {
+class MainActivity : ComponentActivity(), eqlcore.MessageReceiver{
     private var messages by mutableStateOf(listOf<String>())
     private var nodeId by mutableStateOf("Нода не запущена")
     private var nodeInfo by mutableStateOf("")
@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity(), chatnode.MessageReceiver {
         super.onCreate(savedInstanceState)
 
         // Регистрируем себя как receiver для сообщений
-        Chatnode.setMessageReceiver(this)
+        Eqlcore.setMessageReceiver(this)
 
         setContent {
             NodeScreen(
@@ -63,12 +63,12 @@ class MainActivity : ComponentActivity(), chatnode.MessageReceiver {
     private fun startNode() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val id = Chatnode.startNode("/ip4/0.0.0.0/tcp/0/ws", "chat-room")
+                val id = Eqlcore.startNode("/ip4/0.0.0.0/tcp/0/ws", "chat-room")
                 nodeId = "Node ID: $id"
                 Log.e("ChatNode", nodeId)
 
                 // Получаем информацию о ноде
-                val info = Chatnode.getNodeInfo()
+                val info = Eqlcore.getNodeInfo()
                 nodeInfo = "Node Info: $info"
                 Log.e("ChatNode", "Node Info: $info")
 
@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity(), chatnode.MessageReceiver {
     private fun sendMessage(message: String) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val result = Chatnode.sendMessage(message)
+                val result = Eqlcore.sendMessage(message)
                 Log.e("ChatNode", "Результат отправки: $result")
 
                 // Добавляем своё сообщение в список
