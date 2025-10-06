@@ -41,12 +41,15 @@ type NodeInfo struct {
 	Addrs []string
 }
 
+type topicStruct struct {
+	Topic *pubsub.Topic
+	Sub   *pubsub.Subscription
+}
 // инкапсулированная нода (не экспортируется в Kotlin)
 type chatNodeInternal struct {
 	Node     host.Host
 	PubSub   *pubsub.PubSub
-	Topic    *pubsub.Topic
-	Sub      *pubsub.Subscription
+	Topics    map[string]*topicStruct
 }
 
 // --- Вспомогательные функции ---
@@ -141,27 +144,13 @@ func StartNode(listenAddr string, topic string) string {
 		return "ERROR: " + err.Error()
 	}
 
-	t, err := ps.Join(topic)
-	if err != nil {
-		log.Println("Ошибка подписки на топик:", err)
-		return "ERROR: " + err.Error()
-	}
-
-	sub, err := t.Subscribe()
-	if err != nil {
-		log.Println("Ошибка подписки:", err)
-		return "ERROR: " + err.Error()
-	}
-
 	node = &chatNodeInternal{
-		Node:     h,
-		PubSub:   ps,
-		Topic:    t,
-		Sub:      sub,
+		Node:   h,
+		PubSub: ps,
 	}
 
+	SubscribeToTopic(topic)
 	go discoverPeers(ctx, h, topic)
-	go node.readLoop()
 
 	return h.ID().String()
 }
@@ -176,11 +165,16 @@ func StopNode() string {
 	return "OK"
 }
 
-func SendMessage(msg string) string {
-	if node == nil || node.Topic == nil {
+func SendMessage(msg string, topic string) string {
+	if node == nil || node.Topics == nil {
 		return "ERROR: node not initialized"
 	}
-	if err := node.Topic.Publish(ctx, []byte(msg)); err != nil {
+
+	if _, ok := node.Topics[topic]; !ok {
+		SubscribeToTopic(topic)
+	}
+
+	if err := node.Topics[topic].Topic.Publish(ctx, []byte(msg)); err != nil {
 		log.Println("Ошибка отправки сообщения:", err)
 		return "ERROR: " + err.Error()
 	}
@@ -208,25 +202,54 @@ func SetMessageReceiver(receiver MessageReceiver) {
 	messageReceiver = receiver
 }
 
-// --- цикл чтения сообщений ---
-func (c *chatNodeInternal) readLoop() {
-	for {
-		msg, err := c.Sub.Next(ctx)
-		if err != nil {
-			log.Println("readLoop ended:", err)
-			return
-		}
-		if msg.GetFrom() == c.Node.ID() {
-			continue
-		}
-
-		receiverMutex.RLock()
-		if messageReceiver != nil {
-			messageReceiver.OnMessageReceived(msg.ReceivedFrom.String(), string(msg.Message.Data))
-		}
-		receiverMutex.RUnlock()
+func SubscribeToTopic(topic string) string {
+	if node == nil || node.PubSub == nil {
+		return "node not initialized"
 	}
+
+	if _, ok := node.Topics[topic]; ok {
+		return "already subscribed"
+	}
+
+	t, err := node.PubSub.Join(topic)
+	if err != nil {
+		log.Println("Ошибка подписки на топик:", err)
+		return "ERROR: " + err.Error()
+	}
+
+	sub, err := t.Subscribe()
+	if err != nil {
+		log.Println("Ошибка подписки:", err)
+		return "ERROR: " + err.Error()
+	}
+
+	if node.Topics == nil {
+		node.Topics = make(map[string]*topicStruct)
+	}
+
+	node.Topics[topic]=&topicStruct{Topic: t, Sub: sub}
+
+	// Запускаем readLoop для обработки входящих сообщений
+	go func() {
+		for {
+			msg, err := sub.Next(ctx)
+			if err != nil {
+				return
+			}
+			if msg.GetFrom() == node.Node.ID() {
+				continue
+			}
+			receiverMutex.RLock()
+			if messageReceiver != nil {
+				messageReceiver.OnMessageReceived(msg.ReceivedFrom.String(), string(msg.Message.Data))
+			}
+			receiverMutex.RUnlock()
+		}
+	}()
+
+	return "успешно подписан на топик: {" + topic + "}"
 }
+
 
 // Получение адресов ноды для отображения в Kotlin
 func GetNodeInfo() string {
