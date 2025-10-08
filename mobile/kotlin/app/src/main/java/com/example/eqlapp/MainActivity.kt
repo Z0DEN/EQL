@@ -1,5 +1,7 @@
 package com.example.eqlapp
 
+import android.content.Context
+import android.net.wifi.WifiManager
 import eqlcore.Eqlcore
 import android.os.Bundle
 import android.util.Log
@@ -19,18 +21,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.ui.text.input.KeyboardType
+import com.example.eqlapp.ui.theme.EQLappTheme
 
 class MainActivity : ComponentActivity(), eqlcore.MessageReceiver{
     private var messages by mutableStateOf(listOf<String>())
     private var nodeId by mutableStateOf("Нода не запущена")
     private var nodeInfo by mutableStateOf("")
     private var messageText by mutableStateOf("")
+    private var topics by mutableStateOf(listOf<String>())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val multicastLock = wifiManager.createMulticastLock("mdnsLock")
+        multicastLock.setReferenceCounted(true)
+        multicastLock.acquire()
+
 
         // Регистрируем себя как receiver для сообщений
         Eqlcore.setMessageReceiver(this)
+
 
         setContent {
             NodeScreen(
@@ -40,6 +50,7 @@ class MainActivity : ComponentActivity(), eqlcore.MessageReceiver{
                 messageText = messageText,
                 onMessageTextChange = { newText -> messageText = newText },
                 onStartNode = { startNode() },
+                onStopNode = { stopNode() },
                 onSendMessage = {
                     if (messageText.isNotBlank()) {
                         sendMessage(messageText)
@@ -51,19 +62,12 @@ class MainActivity : ComponentActivity(), eqlcore.MessageReceiver{
         }
     }
 
-    override fun onMessageReceived(from: String, msg: String) {
-        Log.e("ChatNode", "Получено сообщение от $from: $msg")
-
-        // Обновляем UI в главном потоке
-        runOnUiThread {
-            messages = messages + "От $from: $msg"
-        }
-    }
-
     private fun startNode() {
+        topics = topics + "chat-room"
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val id = Eqlcore.startNode("/ip4/0.0.0.0/tcp/0/ws", "chat-room")
+                val id = Eqlcore.startNode("/ip4/0.0.0.0/tcp/0", topics[0])
+
                 nodeId = "Node ID: $id"
                 Log.e("ChatNode", nodeId)
 
@@ -79,10 +83,27 @@ class MainActivity : ComponentActivity(), eqlcore.MessageReceiver{
         }
     }
 
+    private fun stopNode(){
+        messages = listOf<String>()
+        nodeId = "Нода не запущена"
+        nodeInfo = ""
+        topics = listOf<String>()
+        Log.e("ChatNode", Eqlcore.stopNode())
+    }
+
+    override fun onMessageReceived(from: String, msg: String) {
+        Log.e("ChatNode", "Получено сообщение от $from: $msg")
+
+        // Обновляем UI в главном потоке
+        runOnUiThread {
+            messages = messages + "От ${from.substring(from.length-5)}: $msg"
+        }
+    }
+
     private fun sendMessage(message: String) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val result = Eqlcore.sendMessage(message)
+                val result = Eqlcore.sendMessage(message, topics[0])
                 Log.e("ChatNode", "Результат отправки: $result")
 
                 // Добавляем своё сообщение в список
@@ -104,6 +125,7 @@ fun NodeScreen(
     messageText: String,
     onMessageTextChange: (String) -> Unit,
     onStartNode: () -> Unit,
+    onStopNode: () -> Unit,
     onSendMessage: () -> Unit,
     scope: CoroutineScope
 ) {
@@ -188,19 +210,26 @@ fun NodeScreen(
             }
         }
 
-        // Кнопки управления
-        Column(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
                 onClick = onStartNode,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
                 enabled = !nodeId.startsWith("Node ID:")
             ) {
-                Text(if (nodeId.startsWith("Node ID:")) "Нода запущена" else "Создать ноду")
+                Text("Запустить")
+            }
+
+            Button(
+                onClick = onStopNode,
+                modifier = Modifier.weight(1f),
+                enabled = nodeId.startsWith("Node ID:")
+            ) {
+                Text("Остановить")
             }
         }
+
     }
 }
