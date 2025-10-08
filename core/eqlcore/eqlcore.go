@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	// "time"
 
 	libp2p "github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -15,10 +16,14 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
+	//relay "github.com/libp2p/go-libp2p-circuit"
+	// "github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	multiaddr "github.com/multiformats/go-multiaddr"
+	//"github.com/libp2p/go-libp2p/p2p/discovery"
 )
 
 // MessageReceiver interface for Kotlin callbacks
@@ -50,8 +55,21 @@ type chatNodeInternal struct {
 	Node     host.Host
 	PubSub   *pubsub.PubSub
 	Topics    map[string]*topicStruct
+	MdnsService mdns.Service
 }
 
+type mdnsNotifee struct {
+	host host.Host
+}
+
+func (n *mdnsNotifee) HandlePeerFound(pi peer.AddrInfo) {
+	log.Println("mDNS обнаружил пира:", pi.ID)
+	if err := n.host.Connect(context.Background(), pi); err != nil {
+		log.Println("Ошибка подключения к пирам:", err)
+	} else {
+		log.Println("✅ Подключились к", pi.ID)
+	}
+}
 // --- Вспомогательные функции ---
 
 func createIdentity() (crypto.PrivKey, string) {
@@ -128,9 +146,10 @@ func StartNode(listenAddr string, topic string) string {
 
 	h, err := libp2p.New(
 		libp2p.Identity(priv),
-		libp2p.ListenAddrStrings(listenAddr),
 		libp2p.ListenAddrs(addr),
+		// libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Security(noise.ID, noise.New),
+		libp2p.EnableHolePunching(),
 	)
 
 	if err != nil {
@@ -144,13 +163,20 @@ func StartNode(listenAddr string, topic string) string {
 		return "ERROR: " + err.Error()
 	}
 
+	notifee := &mdnsNotifee{host: h}
+	service := mdns.NewMdnsService(h, "", notifee)
+	if err := service.Start(); err != nil {
+		log.Println("Ошибка запуска mDNS:", err)
+	}
+
 	node = &chatNodeInternal{
 		Node:   h,
 		PubSub: ps,
+		MdnsService: service,
 	}
 
 	SubscribeToTopic(topic)
-	go discoverPeers(ctx, h, topic)
+	//go discoverPeers(ctx, h, topic)
 
 	return h.ID().String()
 }
@@ -161,6 +187,7 @@ func StopNode() string {
 	}
 	if node != nil {
 		node.Node.Close()
+		node.MdnsService.Close()
 	}
 	return "OK"
 }
