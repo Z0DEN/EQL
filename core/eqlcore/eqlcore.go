@@ -1,13 +1,12 @@
 package eqlcore
 
-import "C"
-
 import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
 	"log"
 	"sync"
+	"net"
 	// "time"
 
 	libp2p "github.com/libp2p/go-libp2p"
@@ -137,8 +136,9 @@ func discoverPeers(ctx context.Context, h host.Host, topic string) {
 // Возвращаем строку: либо ID, либо "ERROR: ..."
 func StartNode(listenAddr string, topic string) string {
 	ctx, cancel = context.WithCancel(context.Background())
-
+	// localaddr := getLocalIP()
 	addr, _ := multiaddr.NewMultiaddr(listenAddr)
+
 	priv, errStr := createIdentity()
 	if priv == nil {
 		return errStr
@@ -147,6 +147,7 @@ func StartNode(listenAddr string, topic string) string {
 	h, err := libp2p.New(
 		libp2p.Identity(priv),
 		libp2p.ListenAddrs(addr),
+		// libp2p.ListenAddrStrings("/ip4/" + localaddr + "/tcp/0"),
 		// libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Security(noise.ID, noise.New),
 		libp2p.EnableHolePunching(),
@@ -308,3 +309,30 @@ func GetNodeInfo() string {
 	return string(b)
 }
 
+
+func getLocalIP() string {
+	ifaces, _ := net.Interfaces()
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			ip = ip.To4()
+			if ip != nil {
+				return ip.String()
+			}
+		}
+	}
+	return "127.0.0.1"
+}
